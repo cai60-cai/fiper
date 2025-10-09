@@ -309,7 +309,7 @@ If you find FIPER useful, please consider citing our work:
 ```
 @inproceedings{romer2025fiper,
           title={Failure Prediction at Runtime for Generative Robot Policies},
-          author={Ralf R\"o"mer and Adrian Kobras and Luca Worbis and Angela P. Schoellig},
+          author={Ralf R\"omer and Adrian Kobras and Luca Worbis and Angela P. Schoellig},
           journal={Advances in Neural Information Processing Systems (NeurIPS)},
           year={2025}
 }
