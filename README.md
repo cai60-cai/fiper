@@ -7,7 +7,8 @@ Luca Worbis<sup>1</sup>,
 
 <sup>1</sup>Technical University of Munich
 
-<a href='https://tum-lsy.github.io/fiper_website/'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://arxiv.org/TODO'><img src='https://img.shields.io/badge/Paper-Arxiv-red'></a> [![YouTube](https://badges.aleen42.com/src/youtube.svg)](https://youtube.com)
+<a href='https://tum-lsy.github.io/fiper_website/'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://arxiv.org/TODO'><img src='https://img.shields.io/badge/Paper-Arxiv-red'></a> 
+<!-- [![YouTube](https://badges.aleen42.com/src/youtube.svg)](https://youtube.com) -->
 
 The official code repository for *"Failure Prediction at Runtime for Generative Robot Policies,"* accepted to NeurIPS 2025.
 
