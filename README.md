@@ -12,7 +12,7 @@ Luca Worbis<sup>1</sup>,
 
 The official code repository for *"Failure Prediction at Runtime for Generative Robot Policies,"* accepted to NeurIPS 2025.
 
-<img src="fiper.png" alt="FIPER"/>
+<img src="fiper_dark.png" alt="FIPER"/>
 
 
 ## Overview
