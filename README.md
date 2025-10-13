@@ -7,8 +7,8 @@ Luca Worbis<sup>1</sup>,
 
 <sup>1</sup>Technical University of Munich
 
-<a href='https://arxiv.org/abs/2510.09459'><img src='https://img.shields.io/badge/arXiv-2510.09459-red'></a>
-<a href='https://tum-lsy.github.io/fiper_website/'><img src='https://img.shields.io/badge/Website-FIPER-blue'></a>  
+[![arXiv](https://img.shields.io/badge/arXiv-2510.09459-red)](https://arxiv.org/abs/2510.09459)
+[![Website](https://img.shields.io/badge/Website-FIPER-blue)](https://tum-lsy.github.io/fiper_website/)
 [![PyTorch](https://img.shields.io/badge/Python-PyTorch-orange.svg)](https://www.pytorch.org)
 <!-- [![YouTube](https://badges.aleen42.com/src/youtube.svg)](https://youtube.com) -->
 
