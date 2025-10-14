@@ -480,7 +480,7 @@ class ResultsManager:
                 warning_frames.append(warning_frame)
                 episode_lengths.append(len(x))
 
-            save_videos_with_warning(task, warning_frames, episode_lengths)
+            save_videos_with_warning(task, warning_frames, episode_lengths, self.base_data_path)
 
             # print("Warning frames:", warning_frames)
             # print("Episode lengths:", episode_lengths)

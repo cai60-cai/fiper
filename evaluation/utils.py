@@ -517,10 +517,11 @@ def calculate_metrics(scores_by_threshold: list, dataset_stats: dict, detection_
     return metrics
 
 
-def save_videos_with_warning(task, warning_frames, episode_lengths):
-    path = f"/home/ralf_roemer/Projects/fiper/data/{task}/rollouts/test"
+def save_videos_with_warning(task, warning_frames, episode_lengths, base_data_path):
+    path = f"{base_data_path}/{task}/rollouts/test"
 
-    save_path = f"/home/ralf_roemer/Projects/fiper/paper_figs/data/{task}/rollouts/test_frames"
+    save_path = f"{base_data_path}/results/videos_with_warnings/{task}/rollouts/test_frames"
+    os.makedirs(save_path, exist_ok=True)
 
     # For each episode_XX.pkl in path, load the pickle file. 
     for k, file in enumerate(sorted(os.listdir(path))):
@@ -577,5 +578,5 @@ def save_videos_with_warning(task, warning_frames, episode_lengths):
                     img.save(f)
 
             # In addition, create a single mp4 video for the episode using ffmpeg. Save in .../rollouts/
-            video_path = os.path.join(f"/home/ralf_roemer/Projects/fiper/paper_figs/data/{task}/rollouts", f"{episode_name}.mp4")
+            video_path = os.path.join(f"{base_data_path}/results/videos_with_warnings/{task}/rollouts/", f"{episode_name}.mp4")
             os.system(f"ffmpeg -y -framerate 10 -i {episode_path}/frame_%04d.jpg -c:v libx264 -pix_fmt yuv420p {video_path}")
