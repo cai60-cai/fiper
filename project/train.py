@@ -22,6 +22,14 @@ from .model import SPLNet
 from .utils import NormalizationStats, discover_tasks, save_json
 
 
+COMPONENT_WEIGHTS = {
+    "reconstruction": 0.45,
+    "dynamics": 0.15,
+    "latent_energy": 0.15,
+    "mahalanobis": 0.25,
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train SPLNet on successful calibration rollouts.")
     parser.add_argument("--data-root", type=Path, default=Path("data"), help="Root directory containing task rollouts.")
@@ -80,20 +88,87 @@ def train_epoch(
     return total_loss / max(len(loader), 1)
 
 
-def evaluate_training_error(
+def collect_calibration_components(
     model: SPLNet,
     loader: DataLoader,
     device: torch.device,
     task_name: str,
-) -> np.ndarray:
+) -> Dict[str, np.ndarray]:
     model.eval()
-    scores: List[np.ndarray] = []
+    comp_buffers: Dict[str, List[np.ndarray]] = {
+        "reconstruction": [],
+        "dynamics": [],
+        "latent_energy": [],
+        "latent_summary": [],
+    }
     with torch.no_grad():
         for batch in tqdm(loader, desc=f"{task_name}:calibrate", leave=False):
             batch = batch.to(device)
-            score = model.reconstruction_score(batch)
-            scores.append(score.cpu().numpy())
-    return np.concatenate(scores, axis=0)
+            components = model.score_components(batch)
+            comp_buffers["reconstruction"].append(components["reconstruction"].cpu().numpy())
+            comp_buffers["dynamics"].append(components["dynamics"].cpu().numpy())
+            comp_buffers["latent_energy"].append(components["latent_energy"].cpu().numpy())
+            comp_buffers["latent_summary"].append(components["latent_summary"].cpu().numpy())
+
+    aggregated = {key: np.concatenate(value, axis=0) for key, value in comp_buffers.items()}
+    return aggregated
+
+
+def compute_latent_statistics(latent_vectors: np.ndarray, ridge_coef: float = 1e-3) -> Dict[str, np.ndarray]:
+    mean = latent_vectors.mean(axis=0)
+    centered = latent_vectors - mean
+    denom = max(latent_vectors.shape[0] - 1, 1)
+    cov = (centered.T @ centered) / float(denom)
+    cov = cov.astype(np.float32)
+    trace = float(np.trace(cov))
+    if not np.isfinite(trace) or trace <= 0.0:
+        trace = float(cov.shape[0])
+    ridge = ridge_coef * trace / float(cov.shape[0])
+    cov += ridge * np.eye(cov.shape[0], dtype=np.float32)
+    precision = np.linalg.inv(cov)
+    return {
+        "mean": mean.astype(np.float32),
+        "precision": precision.astype(np.float32),
+        "ridge": float(ridge),
+    }
+
+
+def compute_mahalanobis(latent_vectors: np.ndarray, mean: np.ndarray, precision: np.ndarray) -> np.ndarray:
+    diff = latent_vectors - mean
+    scores = np.einsum("bi,ij,bj->b", diff, precision, diff)
+    return scores.astype(np.float32)
+
+
+def combine_component_scores(components: Dict[str, np.ndarray]) -> tuple[np.ndarray, Dict[str, Dict[str, float]]]:
+    stats: Dict[str, Dict[str, float]] = {}
+    combined = None
+    for name, values in components.items():
+        mean = float(values.mean())
+        std = float(values.std() + 1e-6)
+        weight = float(COMPONENT_WEIGHTS.get(name, 0.0))
+        stats[name] = {"mean": mean, "std": std, "weight": weight}
+        normalized = (values - mean) / std
+        if combined is None:
+            combined = weight * normalized
+        else:
+            combined += weight * normalized
+    assert combined is not None
+    return combined.astype(np.float32), stats
+
+
+def prepare_calibration_profile(
+    model: SPLNet,
+    loader: DataLoader,
+    device: torch.device,
+    task_name: str,
+) -> tuple[np.ndarray, Dict[str, Dict[str, float]], Dict[str, np.ndarray]]:
+    raw_components = collect_calibration_components(model, loader, device, task_name)
+    latent_vectors = raw_components.pop("latent_summary")
+    latent_stats = compute_latent_statistics(latent_vectors)
+    mahal = compute_mahalanobis(latent_vectors, latent_stats["mean"], latent_stats["precision"])
+    raw_components["mahalanobis"] = mahal
+    combined_scores, component_stats = combine_component_scores(raw_components)
+    return combined_scores, component_stats, latent_stats
 
 
 def plot_losses(losses: List[float], path: Path) -> None:
@@ -158,7 +233,7 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
         num_workers=args.num_workers,
         pin_memory=device.type == "cuda",
     )
-    calibration_scores = evaluate_training_error(model, calib_loader, device, task)
+    calibration_scores, component_stats, latent_stats = prepare_calibration_profile(model, calib_loader, device, task)
     threshold = float(np.quantile(calibration_scores, args.threshold_quantile))
     save_json(
         {
@@ -167,9 +242,21 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
             "scores_mean": float(calibration_scores.mean()),
             "scores_std": float(calibration_scores.std()),
             "num_scores": int(calibration_scores.shape[0]),
+            "component_weights": COMPONENT_WEIGHTS,
         },
         task_result_dir / "threshold.json",
     )
+    save_json(
+        {
+            "components": component_stats,
+            "num_windows": int(calibration_scores.shape[0]),
+            "latent_dim": int(latent_stats["mean"].shape[0]),
+            "ridge": float(latent_stats["ridge"]),
+        },
+        task_result_dir / "calibration_components.json",
+    )
+    np.save(task_result_dir / "latent_mean.npy", latent_stats["mean"])
+    np.save(task_result_dir / "latent_precision.npy", latent_stats["precision"])
 
     config: Dict[str, object] = {**vars(args)}
     config.update(
@@ -196,6 +283,7 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
         "feature_dim": dataset.feature_dim,
         "calibration_scores_mean": float(calibration_scores.mean()),
         "calibration_scores_std": float(calibration_scores.std()),
+        "component_stats": component_stats,
     }
     print(
         "[SUMMARY] task={task} windows={windows} episodes={episodes} final_loss={final_loss:.6f} threshold={threshold:.6f}".format(

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+from typing import Dict
 
 import torch
 from torch import Tensor, nn
@@ -78,14 +79,28 @@ class SPLNet(nn.Module):
         latent_summary = latent_tokens.mean(dim=1)
         return SPLForwardOutput(reconstruction=reconstruction, latent_summary=latent_summary, encoded_sequence=encoded)
 
+    def score_components(self, inputs: Tensor) -> Dict[str, Tensor]:
+        """Return individual scoring components for a batch of windows."""
+
+        outputs = self.forward(inputs)
+        recon_error = F.mse_loss(outputs.reconstruction, inputs, reduction="none").mean(dim=(1, 2))
+        if outputs.encoded_sequence.size(1) > 1:
+            dynamics = outputs.encoded_sequence[:, 1:, :] - outputs.encoded_sequence[:, :-1, :]
+            dynamics_penalty = torch.mean(torch.square(dynamics), dim=(1, 2))
+        else:
+            dynamics_penalty = torch.zeros(outputs.reconstruction.size(0), device=inputs.device, dtype=inputs.dtype)
+        latent_energy = torch.mean(torch.square(outputs.latent_summary), dim=1)
+        return {
+            "reconstruction": recon_error,
+            "dynamics": dynamics_penalty,
+            "latent_energy": latent_energy,
+            "latent_summary": outputs.latent_summary,
+        }
+
     def reconstruction_score(self, inputs: Tensor) -> Tensor:
         with torch.no_grad():
-            outputs = self.forward(inputs)
-            recon_error = F.mse_loss(outputs.reconstruction, inputs, reduction="none").mean(dim=(1, 2))
-            if outputs.encoded_sequence.size(1) > 1:
-                dynamics = outputs.encoded_sequence[:, 1:, :] - outputs.encoded_sequence[:, :-1, :]
-                dynamics_penalty = torch.mean(torch.square(dynamics), dim=(1, 2))
-            else:
-                dynamics_penalty = torch.zeros_like(recon_error)
-            latent_norm = torch.mean(torch.square(outputs.latent_summary), dim=1)
+            components = self.score_components(inputs)
+            recon_error = components["reconstruction"]
+            dynamics_penalty = components["dynamics"]
+            latent_norm = components["latent_energy"]
             return recon_error + 0.1 * dynamics_penalty + 0.01 * latent_norm
