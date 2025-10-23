@@ -37,11 +37,13 @@ def load_model(
     Dict[str, Dict[str, float]],
     np.ndarray,
     np.ndarray,
+    str,
 ]:
     config = load_json(result_dir / "train_config.json")
     stats = NormalizationStats.from_json(load_json(result_dir / "normalization_stats.json"))
     threshold_info = load_json(result_dir / "threshold.json")
     threshold = float(threshold_info["threshold"])
+    aggregation = str(threshold_info.get("aggregation", "max"))
     calibration_path = result_dir / "calibration_components.json"
     if not calibration_path.exists():
         raise FileNotFoundError(f"Missing calibration profile at {calibration_path}.")
@@ -62,7 +64,16 @@ def load_model(
     )
     state_path = result_dir / "splnet.pt"
     model.load_state_dict(torch.load(state_path, map_location="cpu"))
-    return model, stats, threshold, config, calibration_profile, latent_mean, latent_precision
+    return (
+        model,
+        stats,
+        threshold,
+        config,
+        calibration_profile,
+        latent_mean,
+        latent_precision,
+        aggregation,
+    )
 
 
 def mahalanobis_distance_torch(
@@ -89,6 +100,27 @@ def combine_components_torch(
         z_score = (values[name] - mean) / std
         combined = combined + weight * z_score
     return combined
+
+
+def aggregate_scores(values: np.ndarray, aggregation: str) -> float:
+    """Aggregate window scores according to the configured strategy."""
+
+    if values.size == 0:
+        return 0.0
+    agg = aggregation.lower()
+    if agg == "mean":
+        return float(np.mean(values))
+    if agg == "median":
+        return float(np.median(values))
+    if agg.startswith("quantile"):
+        try:
+            _, frac = agg.split(":", 1)
+            quantile = float(frac)
+        except ValueError:
+            quantile = 0.95
+        quantile = float(np.clip(quantile, 0.0, 1.0))
+        return float(np.quantile(values, quantile))
+    return float(np.max(values))
 
 
 def score_episode(
@@ -127,6 +159,7 @@ def compute_metrics(
     episodes: List[EpisodeWindowBundle],
     episode_scores: List[np.ndarray],
     threshold: float,
+    aggregation: str,
 ) -> Dict[str, float]:
     assert len(episodes) == len(episode_scores)
     tp = fp = tn = fn = 0
@@ -134,7 +167,7 @@ def compute_metrics(
     correct_steps = 0
     for bundle, scores in zip(episodes, episode_scores):
         label = 0 if bundle.info.successful else 1
-        episode_score = float(np.max(scores))
+        episode_score = aggregate_scores(scores, aggregation)
         prediction = 1 if episode_score > threshold else 0
         if prediction == 1 and label == 1:
             tp += 1
@@ -164,6 +197,7 @@ def compute_metrics(
         "FN": fn,
         "total_steps": total_steps,
         "correct_steps": correct_steps,
+        "aggregation": aggregation,
     }
 
 
@@ -216,6 +250,7 @@ def evaluate_task(
         component_stats,
         latent_mean,
         latent_precision,
+        aggregation,
     ) = load_model(task_result_dir)
     model.to(device)
     model.eval()
@@ -247,7 +282,7 @@ def evaluate_task(
         )
         episode_scores.append(scores)
 
-    metrics = compute_metrics(episodes, episode_scores, threshold)
+    metrics = compute_metrics(episodes, episode_scores, threshold, aggregation)
     num_windows = int(sum(len(scores) for scores in episode_scores))
     metrics.update(
         {
@@ -261,11 +296,14 @@ def evaluate_task(
 
     details = []
     for bundle, scores in zip(episodes, episode_scores):
+        aggregate_value = aggregate_scores(scores, aggregation)
         details.append(
             {
                 "task": bundle.info.task,
                 "episode": bundle.info.path.stem,
                 "successful": bundle.info.successful,
+                "aggregate_score": aggregate_value,
+                "aggregation": aggregation,
                 "max_score": float(np.max(scores)),
                 "mean_score": float(np.mean(scores)),
                 "num_windows": len(scores),

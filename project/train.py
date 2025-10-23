@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 from .data import SuccessWindowDataset
 from .model import SPLNet
-from .utils import NormalizationStats, discover_tasks, save_json
+from .utils import EpisodeInfo, NormalizationStats, discover_tasks, save_json
 
 
 COMPONENT_WEIGHTS = {
@@ -88,30 +88,63 @@ def train_epoch(
     return total_loss / max(len(loader), 1)
 
 
-def collect_calibration_components(
+def _gather_episode_windows(
+    dataset: SuccessWindowDataset,
+) -> tuple[List[np.ndarray], List[tuple[int, int]], List[EpisodeInfo]]:
+    """Flatten per-episode windows while recording index slices."""
+
+    all_windows: List[np.ndarray] = []
+    window_slices: List[tuple[int, int]] = []
+    episode_infos: List[EpisodeInfo] = []
+
+    for info, windows in dataset.iter_episode_windows():
+        if not windows:
+            continue
+        start = len(all_windows)
+        all_windows.extend(windows)
+        end = len(all_windows)
+        if end <= start:
+            continue
+        window_slices.append((start, end))
+        episode_infos.append(info)
+
+    return all_windows, window_slices, episode_infos
+
+
+def _score_windows(
     model: SPLNet,
-    loader: DataLoader,
+    windows: List[np.ndarray],
     device: torch.device,
     task_name: str,
+    batch_size: int,
 ) -> Dict[str, np.ndarray]:
+    """Run ``model.score_components`` over a list of windows."""
+
     model.eval()
-    comp_buffers: Dict[str, List[np.ndarray]] = {
+    buffers: Dict[str, List[np.ndarray]] = {
         "reconstruction": [],
         "dynamics": [],
         "latent_energy": [],
         "latent_summary": [],
     }
-    with torch.no_grad():
-        for batch in tqdm(loader, desc=f"{task_name}:calibrate", leave=False):
-            batch = batch.to(device)
-            components = model.score_components(batch)
-            comp_buffers["reconstruction"].append(components["reconstruction"].cpu().numpy())
-            comp_buffers["dynamics"].append(components["dynamics"].cpu().numpy())
-            comp_buffers["latent_energy"].append(components["latent_energy"].cpu().numpy())
-            comp_buffers["latent_summary"].append(components["latent_summary"].cpu().numpy())
 
-    aggregated = {key: np.concatenate(value, axis=0) for key, value in comp_buffers.items()}
-    return aggregated
+    total = len(windows)
+    if total == 0:
+        raise ValueError("No calibration windows available for scoring.")
+
+    ranges = range(0, total, batch_size)
+    for start in tqdm(ranges, desc=f"{task_name}:calibrate", leave=False):
+        chunk = windows[start : start + batch_size]
+        batch_array = np.stack(chunk, axis=0).astype(np.float32)
+        batch = torch.from_numpy(batch_array).to(device)
+        with torch.no_grad():
+            components = model.score_components(batch)
+        buffers["reconstruction"].append(components["reconstruction"].cpu().numpy())
+        buffers["dynamics"].append(components["dynamics"].cpu().numpy())
+        buffers["latent_energy"].append(components["latent_energy"].cpu().numpy())
+        buffers["latent_summary"].append(components["latent_summary"].cpu().numpy())
+
+    return {key: np.concatenate(value, axis=0) for key, value in buffers.items()}
 
 
 def compute_latent_statistics(latent_vectors: np.ndarray, ridge_coef: float = 1e-3) -> Dict[str, np.ndarray]:
@@ -158,17 +191,41 @@ def combine_component_scores(components: Dict[str, np.ndarray]) -> tuple[np.ndar
 
 def prepare_calibration_profile(
     model: SPLNet,
-    loader: DataLoader,
+    dataset: SuccessWindowDataset,
     device: torch.device,
     task_name: str,
-) -> tuple[np.ndarray, Dict[str, Dict[str, float]], Dict[str, np.ndarray]]:
-    raw_components = collect_calibration_components(model, loader, device, task_name)
+    batch_size: int,
+) -> Dict[str, object]:
+    """Compute calibration statistics using per-episode aggregation."""
+
+    windows, slices, infos = _gather_episode_windows(dataset)
+    if not windows:
+        raise ValueError("No windows gathered for calibration.")
+
+    raw_components = _score_windows(model, windows, device, task_name, batch_size)
     latent_vectors = raw_components.pop("latent_summary")
     latent_stats = compute_latent_statistics(latent_vectors)
     mahal = compute_mahalanobis(latent_vectors, latent_stats["mean"], latent_stats["precision"])
     raw_components["mahalanobis"] = mahal
     combined_scores, component_stats = combine_component_scores(raw_components)
-    return combined_scores, component_stats, latent_stats
+
+    episode_maxima: List[float] = []
+    episode_means: List[float] = []
+    for start, end in slices:
+        episode_slice = combined_scores[start:end]
+        episode_maxima.append(float(np.max(episode_slice)))
+        episode_means.append(float(np.mean(episode_slice)))
+
+    profile: Dict[str, object] = {
+        "combined_scores": combined_scores,
+        "component_stats": component_stats,
+        "latent_stats": latent_stats,
+        "episode_maxima": np.asarray(episode_maxima, dtype=np.float32),
+        "episode_means": np.asarray(episode_means, dtype=np.float32),
+        "window_slices": slices,
+        "episode_infos": infos,
+    }
+    return profile
 
 
 def plot_losses(losses: List[float], path: Path) -> None:
@@ -226,35 +283,61 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
     plot_losses(losses, task_result_dir / "train_loss.png")
     save_json({"losses": losses}, task_result_dir / "train_loss.json")
 
-    calib_loader = DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        pin_memory=device.type == "cuda",
-    )
-    calibration_scores, component_stats, latent_stats = prepare_calibration_profile(model, calib_loader, device, task)
-    threshold = float(np.quantile(calibration_scores, args.threshold_quantile))
+    profile = prepare_calibration_profile(model, dataset, device, task, args.batch_size)
+    combined_scores = profile["combined_scores"]
+    episode_maxima: np.ndarray = profile["episode_maxima"]
+    episode_means: np.ndarray = profile["episode_means"]
+    component_stats = profile["component_stats"]
+    latent_stats = profile["latent_stats"]
+    if episode_maxima.size == 0:
+        raise ValueError("Calibration produced no episode-level scores.")
+    threshold = float(np.quantile(episode_maxima, args.threshold_quantile))
     save_json(
         {
             "threshold": threshold,
             "quantile": args.threshold_quantile,
-            "scores_mean": float(calibration_scores.mean()),
-            "scores_std": float(calibration_scores.std()),
-            "num_scores": int(calibration_scores.shape[0]),
+            "scores_mean": float(combined_scores.mean()),
+            "scores_std": float(combined_scores.std()),
+            "episode_max_mean": float(episode_maxima.mean()),
+            "episode_max_std": float(episode_maxima.std()),
+            "num_scores": int(combined_scores.shape[0]),
+            "num_episode_scores": int(episode_maxima.shape[0]),
             "component_weights": COMPONENT_WEIGHTS,
+            "aggregation": "max",
+            "calibration_target": "episode_max",
         },
         task_result_dir / "threshold.json",
     )
     save_json(
         {
             "components": component_stats,
-            "num_windows": int(calibration_scores.shape[0]),
+            "num_windows": int(combined_scores.shape[0]),
             "latent_dim": int(latent_stats["mean"].shape[0]),
             "ridge": float(latent_stats["ridge"]),
+            "calibration_target": "episode_max",
+            "num_episode_scores": int(episode_maxima.shape[0]),
+            "episode_max_mean": float(episode_maxima.mean()),
+            "episode_max_std": float(episode_maxima.std()),
         },
         task_result_dir / "calibration_components.json",
     )
+    calibration_details = []
+    episode_infos: List[EpisodeInfo] = profile["episode_infos"]
+    window_slices: List[tuple[int, int]] = profile["window_slices"]
+    for idx, info in enumerate(episode_infos):
+        start, end = window_slices[idx]
+        calibration_details.append(
+            {
+                "task": info.task,
+                "episode": info.path.stem,
+                "successful": True,
+                "num_windows": int(end - start),
+                "max_score": float(episode_maxima[idx]),
+                "mean_score": float(episode_means[idx]),
+                "aggregation": "max",
+            }
+        )
+    save_json({"episodes": calibration_details, "aggregation": "max"}, task_result_dir / "calibration_details.json")
     np.save(task_result_dir / "latent_mean.npy", latent_stats["mean"])
     np.save(task_result_dir / "latent_precision.npy", latent_stats["precision"])
 
@@ -281,17 +364,24 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
         "threshold": threshold,
         "threshold_quantile": args.threshold_quantile,
         "feature_dim": dataset.feature_dim,
-        "calibration_scores_mean": float(calibration_scores.mean()),
-        "calibration_scores_std": float(calibration_scores.std()),
+        "calibration_scores_mean": float(combined_scores.mean()),
+        "calibration_scores_std": float(combined_scores.std()),
+        "episode_max_mean": float(episode_maxima.mean()),
+        "episode_max_std": float(episode_maxima.std()),
+        "num_episode_scores": int(episode_maxima.shape[0]),
         "component_stats": component_stats,
     }
     print(
-        "[SUMMARY] task={task} windows={windows} episodes={episodes} final_loss={final_loss:.6f} threshold={threshold:.6f}".format(
+        (
+            "[SUMMARY] task={task} windows={windows} episodes={episodes} final_loss={final_loss:.6f} "
+            "threshold={threshold:.6f} episode_max_mean={episode_mean:.6f}"
+        ).format(
             task=task,
             windows=len(dataset),
             episodes=len(dataset.episodes),
             final_loss=final_loss,
             threshold=threshold,
+            episode_mean=float(episode_maxima.mean()),
         )
     )
     return summary
