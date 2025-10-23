@@ -151,7 +151,21 @@ def apply_normalization(sample: np.ndarray, stats: NormalizationStats) -> np.nda
     return (sample - stats.mean) / stats.std
 
 
-def list_rollout_files(root: Path, split: str) -> List[EpisodeInfo]:
+def discover_tasks(root: Path) -> List[str]:
+    """Return sorted task directory names available under ``root``."""
+
+    tasks: List[str] = []
+    for task_dir in sorted(root.iterdir()):
+        if task_dir.is_dir() and (task_dir / "rollouts").exists():
+            tasks.append(task_dir.name)
+    return tasks
+
+
+def list_rollout_files(
+    root: Path,
+    split: str,
+    tasks: Optional[Sequence[str]] = None,
+) -> List[EpisodeInfo]:
     """Enumerate rollout files for a given split.
 
     Args:
@@ -163,8 +177,11 @@ def list_rollout_files(root: Path, split: str) -> List[EpisodeInfo]:
         raise ValueError(f"Unsupported split: {split}")
 
     rollouts: List[EpisodeInfo] = []
+    task_filter = set(tasks) if tasks else None
     for task_dir in sorted(root.iterdir()):
         if not task_dir.is_dir():
+            continue
+        if task_filter and task_dir.name not in task_filter:
             continue
         rollout_dir = task_dir / "rollouts"
         if not rollout_dir.exists():

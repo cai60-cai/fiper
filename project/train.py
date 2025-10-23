@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -19,12 +19,13 @@ import matplotlib.pyplot as plt
 
 from .data import SuccessWindowDataset
 from .model import SPLNet
-from .utils import NormalizationStats, save_json
+from .utils import NormalizationStats, discover_tasks, save_json
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train SPLNet on successful calibration rollouts.")
     parser.add_argument("--data-root", type=Path, default=Path("data"), help="Root directory containing task rollouts.")
+    parser.add_argument("--tasks", type=str, nargs="*", default=None, help="Specific task names to train; defaults to all tasks found under data root.")
     parser.add_argument("--window-size", type=int, default=32, help="Sliding window length in steps.")
     parser.add_argument("--stride", type=int, default=4, help="Stride for sliding windows.")
     parser.add_argument("--batch-size", type=int, default=32, help="Training batch size.")
@@ -42,19 +43,26 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_dataloader(args: argparse.Namespace) -> SuccessWindowDataset:
+def build_dataset(args: argparse.Namespace, task: str) -> SuccessWindowDataset:
     dataset = SuccessWindowDataset(
         root=args.data_root,
         window_size=args.window_size,
         stride=args.stride,
+        tasks=[task],
     )
     return dataset
 
 
-def train_epoch(model: SPLNet, loader: DataLoader, optimizer: torch.optim.Optimizer, device: torch.device) -> float:
+def train_epoch(
+    model: SPLNet,
+    loader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    task_name: str,
+) -> float:
     model.train()
     total_loss = 0.0
-    for batch in tqdm(loader, desc="train", leave=False):
+    for batch in tqdm(loader, desc=f"{task_name}:train", leave=False):
         batch = batch.to(device)
         outputs = model(batch)
         recon_loss = F.mse_loss(outputs.reconstruction, batch)
@@ -72,11 +80,16 @@ def train_epoch(model: SPLNet, loader: DataLoader, optimizer: torch.optim.Optimi
     return total_loss / max(len(loader), 1)
 
 
-def evaluate_training_error(model: SPLNet, loader: DataLoader, device: torch.device) -> np.ndarray:
+def evaluate_training_error(
+    model: SPLNet,
+    loader: DataLoader,
+    device: torch.device,
+    task_name: str,
+) -> np.ndarray:
     model.eval()
     scores: List[np.ndarray] = []
     with torch.no_grad():
-        for batch in tqdm(loader, desc="calibrate", leave=False):
+        for batch in tqdm(loader, desc=f"{task_name}:calibrate", leave=False):
             batch = batch.to(device)
             score = model.reconstruction_score(batch)
             scores.append(score.cpu().numpy())
@@ -96,11 +109,9 @@ def plot_losses(losses: List[float], path: Path) -> None:
     plt.close()
 
 
-def main() -> None:
-    args = parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    dataset = build_dataloader(args)
+def train_single_task(task: str, args: argparse.Namespace, device: torch.device) -> Dict[str, object]:
+    print(f"[INFO] Training task '{task}'")
+    dataset = build_dataset(args, task)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -126,18 +137,19 @@ def main() -> None:
 
     losses: List[float] = []
     for epoch in range(1, args.epochs + 1):
-        loss = train_epoch(model, loader, optimizer, device)
+        loss = train_epoch(model, loader, optimizer, device, task)
         losses.append(loss)
-        print(f"Epoch {epoch:03d} | loss={loss:.6f}")
+        print(f"[TRAIN] task={task} epoch={epoch:03d} loss={loss:.6f}")
 
-    args.result_dir.mkdir(parents=True, exist_ok=True)
-    torch.save(model.state_dict(), args.result_dir / "splnet.pt")
+    task_result_dir = args.result_dir / task
+    task_result_dir.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), task_result_dir / "splnet.pt")
 
     stats: NormalizationStats = dataset.stats
-    save_json({"mean": stats.mean.tolist(), "std": stats.std.tolist()}, args.result_dir / "normalization_stats.json")
+    save_json({"mean": stats.mean.tolist(), "std": stats.std.tolist()}, task_result_dir / "normalization_stats.json")
 
-    plot_losses(losses, args.result_dir / "train_loss.png")
-    save_json({"losses": losses}, args.result_dir / "train_loss.json")
+    plot_losses(losses, task_result_dir / "train_loss.png")
+    save_json({"losses": losses}, task_result_dir / "train_loss.json")
 
     calib_loader = DataLoader(
         dataset,
@@ -146,7 +158,7 @@ def main() -> None:
         num_workers=args.num_workers,
         pin_memory=device.type == "cuda",
     )
-    calibration_scores = evaluate_training_error(model, calib_loader, device)
+    calibration_scores = evaluate_training_error(model, calib_loader, device, task)
     threshold = float(np.quantile(calibration_scores, args.threshold_quantile))
     save_json(
         {
@@ -154,14 +166,75 @@ def main() -> None:
             "quantile": args.threshold_quantile,
             "scores_mean": float(calibration_scores.mean()),
             "scores_std": float(calibration_scores.std()),
+            "num_scores": int(calibration_scores.shape[0]),
         },
-        args.result_dir / "threshold.json",
+        task_result_dir / "threshold.json",
     )
 
-    config = vars(args)
-    config["device"] = str(device)
-    config["feature_dim"] = dataset.feature_dim
-    save_json(config, args.result_dir / "train_config.json")
+    config: Dict[str, object] = {**vars(args)}
+    config.update(
+        {
+            "task": task,
+            "device": str(device),
+            "feature_dim": dataset.feature_dim,
+            "num_windows": len(dataset),
+            "num_calibration_episodes": len(dataset.episodes),
+        }
+    )
+    save_json(config, task_result_dir / "train_config.json")
+
+    final_loss = losses[-1] if losses else float("nan")
+    summary = {
+        "task": task,
+        "result_dir": str(task_result_dir),
+        "num_windows": len(dataset),
+        "num_calibration_episodes": len(dataset.episodes),
+        "final_loss": final_loss,
+        "best_loss": float(min(losses)) if losses else float("nan"),
+        "threshold": threshold,
+        "threshold_quantile": args.threshold_quantile,
+        "feature_dim": dataset.feature_dim,
+        "calibration_scores_mean": float(calibration_scores.mean()),
+        "calibration_scores_std": float(calibration_scores.std()),
+    }
+    print(
+        "[SUMMARY] task={task} windows={windows} episodes={episodes} final_loss={final_loss:.6f} threshold={threshold:.6f}".format(
+            task=task,
+            windows=len(dataset),
+            episodes=len(dataset.episodes),
+            final_loss=final_loss,
+            threshold=threshold,
+        )
+    )
+    return summary
+
+
+def main() -> None:
+    args = parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    requested_tasks: Sequence[str]
+    if args.tasks:
+        requested_tasks = args.tasks
+    else:
+        requested_tasks = discover_tasks(args.data_root)
+    if not requested_tasks:
+        raise ValueError("No tasks found for training.")
+
+    args.result_dir.mkdir(parents=True, exist_ok=True)
+
+    summaries: List[Dict[str, object]] = []
+    for task in requested_tasks:
+        try:
+            summary = train_single_task(task, args, device)
+            summaries.append(summary)
+        except ValueError as exc:
+            print(f"[WARN] Skipping task '{task}': {exc}")
+
+    if not summaries:
+        raise RuntimeError("Training failed for all requested tasks.")
+
+    save_json({"tasks": summaries}, args.result_dir / "train_summary.json")
 
 
 if __name__ == "__main__":

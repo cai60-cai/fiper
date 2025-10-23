@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional, Sequence
 
 import numpy as np
 import torch
@@ -35,13 +35,14 @@ class SuccessWindowDataset(Dataset):
         window_size: int,
         stride: int,
         stats: NormalizationStats | None = None,
+        tasks: Optional[Sequence[str]] = None,
     ) -> None:
         self.root = root
         self.window_size = window_size
         self.stride = stride
         self._raw_samples: List[np.ndarray] = []
         self._episodes: List[EpisodeInfo] = []
-        for info in list_rollout_files(root, split="train"):
+        for info in list_rollout_files(root, split="train", tasks=tasks):
             features, windows = episode_windows(info.path, window_size=window_size, stride=stride)
             if not windows:
                 continue
@@ -55,6 +56,7 @@ class SuccessWindowDataset(Dataset):
             self.stats = stats
         self.samples = [apply_normalization(sample, self.stats).astype(np.float32) for sample in self._raw_samples]
         self.feature_dim = self.samples[0].shape[-1]
+        self.episodes = list(self._episodes)
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -73,9 +75,10 @@ def load_evaluation_episodes(
     stats: NormalizationStats,
     window_size: int,
     stride: int,
+    tasks: Optional[Sequence[str]] = None,
 ) -> List[EpisodeWindowBundle]:
     bundles: List[EpisodeWindowBundle] = []
-    for info in list_rollout_files(root, split="eval"):
+    for info in list_rollout_files(root, split="eval", tasks=tasks):
         features, windows = episode_windows(info.path, window_size=window_size, stride=stride)
         normalized = [apply_normalization(window, stats).astype(np.float32) for window in windows]
         bundles.append(EpisodeWindowBundle(info=info, windows=normalized, step_count=features.shape[0]))

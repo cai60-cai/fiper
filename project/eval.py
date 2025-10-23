@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -12,13 +12,14 @@ from tqdm.auto import tqdm
 
 from .data import EpisodeWindowBundle, load_evaluation_episodes
 from .model import SPLNet
-from .utils import NormalizationStats, load_json, save_json
+from .utils import NormalizationStats, discover_tasks, load_json, save_json
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate SPLNet failure detection performance.")
     parser.add_argument("--data-root", type=Path, default=Path("data"), help="Root directory with task rollouts.")
     parser.add_argument("--result-dir", type=Path, default=Path("result"), help="Directory containing trained artefacts.")
+    parser.add_argument("--tasks", type=str, nargs="*", default=None, help="Specific tasks to evaluate; defaults to tasks with saved models.")
     parser.add_argument("--window-size", type=int, default=32, help="Sliding window length used during training.")
     parser.add_argument("--stride", type=int, default=4, help="Stride used during training.")
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size for evaluation windows.")
@@ -102,29 +103,87 @@ def compute_metrics(
         "TN": tn,
         "FP": fp,
         "FN": fn,
+        "total_steps": total_steps,
+        "correct_steps": correct_steps,
     }
 
 
-def main() -> None:
-    args = parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, stats, threshold, config = load_model(args.result_dir)
+def aggregate_metrics(metrics_list: Sequence[Dict[str, float]]) -> Dict[str, float]:
+    totals = {"TP": 0.0, "TN": 0.0, "FP": 0.0, "FN": 0.0, "total_steps": 0.0, "correct_steps": 0.0}
+    for metrics in metrics_list:
+        totals["TP"] += float(metrics.get("TP", 0.0))
+        totals["TN"] += float(metrics.get("TN", 0.0))
+        totals["FP"] += float(metrics.get("FP", 0.0))
+        totals["FN"] += float(metrics.get("FN", 0.0))
+        totals["total_steps"] += float(metrics.get("total_steps", 0.0))
+        totals["correct_steps"] += float(metrics.get("correct_steps", 0.0))
+
+    total_episodes = totals["TP"] + totals["TN"] + totals["FP"] + totals["FN"]
+    accuracy = (totals["TP"] + totals["TN"]) / total_episodes if total_episodes else 0.0
+    tpr = totals["TP"] / (totals["TP"] + totals["FN"]) if (totals["TP"] + totals["FN"]) else 0.0
+    tnr = totals["TN"] / (totals["TN"] + totals["FP"]) if (totals["TN"] + totals["FP"]) else 0.0
+    twa = totals["correct_steps"] / totals["total_steps"] if totals["total_steps"] else 0.0
+
+    return {
+        "accuracy": accuracy,
+        "TPR": tpr,
+        "TNR": tnr,
+        "TWA": twa,
+        "episodes": int(total_episodes),
+        "TP": int(totals["TP"]),
+        "TN": int(totals["TN"]),
+        "FP": int(totals["FP"]),
+        "FN": int(totals["FN"]),
+        "total_steps": int(totals["total_steps"]),
+        "correct_steps": int(totals["correct_steps"]),
+        "evaluated_tasks": len(metrics_list),
+    }
+
+
+def evaluate_task(
+    task: str,
+    args: argparse.Namespace,
+    device: torch.device,
+) -> Optional[Tuple[Dict[str, float], Dict[str, object]]]:
+    task_result_dir = args.result_dir / task
+    if not task_result_dir.exists():
+        raise FileNotFoundError(f"Missing artefacts for task '{task}' at {task_result_dir}.")
+
+    model, stats, threshold, config = load_model(task_result_dir)
     model.to(device)
     model.eval()
 
-    episodes = load_evaluation_episodes(args.data_root, stats=stats, window_size=args.window_size, stride=args.stride)
+    window_size = int(config.get("window_size", args.window_size))
+    stride = int(config.get("stride", args.stride))
+
+    episodes = load_evaluation_episodes(
+        args.data_root,
+        stats=stats,
+        window_size=window_size,
+        stride=stride,
+        tasks=[task],
+    )
+    if not episodes:
+        print(f"[WARN] No evaluation episodes for task '{task}'. Skipping.")
+        return None
+
     episode_scores: List[np.ndarray] = []
-    for bundle in tqdm(episodes, desc="episodes"):
+    for bundle in tqdm(episodes, desc=f"{task}:episodes"):
         scores = score_episode(model, bundle, device, args.batch_size)
         episode_scores.append(scores)
 
     metrics = compute_metrics(episodes, episode_scores, threshold)
-    print(json.dumps(metrics, indent=2))
+    num_windows = int(sum(len(scores) for scores in episode_scores))
+    metrics.update(
+        {
+            "task": task,
+            "threshold": float(threshold),
+            "window_size": window_size,
+            "stride": stride,
+            "num_windows": num_windows,
+        }
+    )
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    save_json(metrics, args.output)
-
-    detail_path = args.output.with_name("eval_details.json")
     details = []
     for bundle, scores in zip(episodes, episode_scores):
         details.append(
@@ -137,7 +196,70 @@ def main() -> None:
                 "num_windows": len(scores),
             }
         )
-    save_json({"threshold": threshold, "details": details}, detail_path)
+
+    save_json(metrics, task_result_dir / "eval_metrics.json")
+    save_json(
+        {
+            "threshold": float(threshold),
+            "window_size": window_size,
+            "stride": stride,
+            "details": details,
+        },
+        task_result_dir / "eval_details.json",
+    )
+
+    print(json.dumps(metrics, indent=2))
+
+    return metrics, {
+        "threshold": float(threshold),
+        "window_size": window_size,
+        "stride": stride,
+        "details": details,
+    }
+
+
+def main() -> None:
+    args = parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.tasks:
+        requested_tasks: Sequence[str] = args.tasks
+    else:
+        trained_tasks = sorted([p.name for p in args.result_dir.iterdir() if p.is_dir()]) if args.result_dir.exists() else []
+        requested_tasks = trained_tasks if trained_tasks else discover_tasks(args.data_root)
+
+    if not requested_tasks:
+        raise ValueError("No tasks available for evaluation.")
+
+    metrics_map: Dict[str, Dict[str, float]] = {}
+    details_map: Dict[str, Dict[str, object]] = {}
+    collected_metrics: List[Dict[str, float]] = []
+
+    for task in requested_tasks:
+        try:
+            result = evaluate_task(task, args, device)
+        except FileNotFoundError as exc:
+            print(f"[WARN] {exc}")
+            continue
+        if result is None:
+            continue
+        metrics, task_details = result
+        metrics_map[task] = metrics
+        details_map[task] = task_details
+        collected_metrics.append(metrics)
+
+    if not collected_metrics:
+        raise RuntimeError("Evaluation produced no results; ensure models and test rollouts exist.")
+
+    overall = aggregate_metrics(collected_metrics)
+    print("[OVERALL]")
+    print(json.dumps(overall, indent=2))
+
+    payload = {"tasks": metrics_map, "overall": overall}
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    save_json(payload, args.output)
+
+    detail_path = args.output.with_name("eval_details.json")
+    save_json({"tasks": details_map, "overall": overall}, detail_path)
 
 
 if __name__ == "__main__":
