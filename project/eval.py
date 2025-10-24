@@ -29,31 +29,12 @@ def parse_args() -> argparse.Namespace:
 
 def load_model(
     result_dir: Path,
-) -> Tuple[
-    SPLNet,
-    NormalizationStats,
-    float,
-    Dict[str, object],
-    Dict[str, Dict[str, float]],
-    np.ndarray,
-    np.ndarray,
-    str,
-]:
+) -> Tuple[SPLNet, NormalizationStats, float, Dict[str, object], str]:
     config = load_json(result_dir / "train_config.json")
     stats = NormalizationStats.from_json(load_json(result_dir / "normalization_stats.json"))
     threshold_info = load_json(result_dir / "threshold.json")
     threshold = float(threshold_info["threshold"])
     aggregation = str(threshold_info.get("aggregation", "max"))
-    calibration_path = result_dir / "calibration_components.json"
-    if not calibration_path.exists():
-        raise FileNotFoundError(f"Missing calibration profile at {calibration_path}.")
-    calibration_profile = load_json(calibration_path)["components"]
-    latent_mean_path = result_dir / "latent_mean.npy"
-    latent_precision_path = result_dir / "latent_precision.npy"
-    if not latent_mean_path.exists() or not latent_precision_path.exists():
-        raise FileNotFoundError("Latent statistics files are missing for evaluation.")
-    latent_mean = np.load(latent_mean_path)
-    latent_precision = np.load(latent_precision_path)
     model = SPLNet(
         input_dim=config["feature_dim"],
         hidden_dim=config.get("hidden_dim", 256),
@@ -64,42 +45,7 @@ def load_model(
     )
     state_path = result_dir / "splnet.pt"
     model.load_state_dict(torch.load(state_path, map_location="cpu"))
-    return (
-        model,
-        stats,
-        threshold,
-        config,
-        calibration_profile,
-        latent_mean,
-        latent_precision,
-        aggregation,
-    )
-
-
-def mahalanobis_distance_torch(
-    vectors: torch.Tensor, mean: torch.Tensor, precision: torch.Tensor
-) -> torch.Tensor:
-    diff = vectors - mean.unsqueeze(0)
-    return torch.sum(torch.matmul(diff, precision) * diff, dim=-1)
-
-
-def combine_components_torch(
-    values: Dict[str, torch.Tensor], component_stats: Dict[str, Dict[str, float]]
-) -> torch.Tensor:
-    reference = next(iter(values.values()))
-    combined = torch.zeros_like(reference)
-    for name, stats in component_stats.items():
-        if name not in values:
-            continue
-        weight = float(stats.get("weight", 0.0))
-        if weight == 0.0:
-            continue
-        mean = reference.new_tensor(float(stats.get("mean", 0.0)))
-        std = reference.new_tensor(float(stats.get("std", 1.0)))
-        std = torch.clamp(std, min=1e-6)
-        z_score = (values[name] - mean) / std
-        combined = combined + weight * z_score
-    return combined
+    return model, stats, threshold, config, aggregation
 
 
 def aggregate_scores(values: np.ndarray, aggregation: str) -> float:
@@ -128,30 +74,17 @@ def score_episode(
     bundle: EpisodeWindowBundle,
     device: torch.device,
     batch_size: int,
-    component_stats: Dict[str, Dict[str, float]],
-    latent_mean: np.ndarray,
-    latent_precision: np.ndarray,
 ) -> np.ndarray:
     scores: List[np.ndarray] = []
     windows = bundle.windows
     if not windows:
         return np.zeros(1, dtype=np.float32)
-    mean_tensor = torch.from_numpy(latent_mean.astype(np.float32)).to(device)
-    precision_tensor = torch.from_numpy(latent_precision.astype(np.float32)).to(device)
     for start in range(0, len(windows), batch_size):
         chunk = windows[start : start + batch_size]
         batch = torch.from_numpy(np.stack(chunk, axis=0)).to(device)
         with torch.no_grad():
-            components = model.score_components(batch)
-            mahal = mahalanobis_distance_torch(components["latent_summary"], mean_tensor, precision_tensor)
-            component_values: Dict[str, torch.Tensor] = {
-                "reconstruction": components["reconstruction"],
-                "dynamics": components["dynamics"],
-                "latent_energy": components["latent_energy"],
-                "mahalanobis": mahal,
-            }
-            combined = combine_components_torch(component_values, component_stats)
-        scores.append(combined.cpu().numpy())
+            window_scores = model.reconstruction_score(batch)
+        scores.append(window_scores.cpu().numpy())
     return np.concatenate(scores, axis=0)
 
 
@@ -242,16 +175,7 @@ def evaluate_task(
     if not task_result_dir.exists():
         raise FileNotFoundError(f"Missing artefacts for task '{task}' at {task_result_dir}.")
 
-    (
-        model,
-        stats,
-        threshold,
-        config,
-        component_stats,
-        latent_mean,
-        latent_precision,
-        aggregation,
-    ) = load_model(task_result_dir)
+    model, stats, threshold, config, aggregation = load_model(task_result_dir)
     model.to(device)
     model.eval()
 
@@ -276,9 +200,6 @@ def evaluate_task(
             bundle,
             device,
             args.batch_size,
-            component_stats,
-            latent_mean,
-            latent_precision,
         )
         episode_scores.append(scores)
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Sequence
 
 import numpy as np
 import torch
@@ -19,15 +19,7 @@ import matplotlib.pyplot as plt
 
 from .data import SuccessWindowDataset
 from .model import SPLNet
-from .utils import EpisodeInfo, NormalizationStats, discover_tasks, save_json
-
-
-COMPONENT_WEIGHTS = {
-    "reconstruction": 0.45,
-    "dynamics": 0.15,
-    "latent_energy": 0.15,
-    "mahalanobis": 0.25,
-}
+from .utils import NormalizationStats, discover_tasks, save_json
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,144 +80,62 @@ def train_epoch(
     return total_loss / max(len(loader), 1)
 
 
-def _gather_episode_windows(
-    dataset: SuccessWindowDataset,
-) -> tuple[List[np.ndarray], List[tuple[int, int]], List[EpisodeInfo]]:
-    """Flatten per-episode windows while recording index slices."""
-
-    all_windows: List[np.ndarray] = []
-    window_slices: List[tuple[int, int]] = []
-    episode_infos: List[EpisodeInfo] = []
-
-    for info, windows in dataset.iter_episode_windows():
-        if not windows:
-            continue
-        start = len(all_windows)
-        all_windows.extend(windows)
-        end = len(all_windows)
-        if end <= start:
-            continue
-        window_slices.append((start, end))
-        episode_infos.append(info)
-
-    return all_windows, window_slices, episode_infos
-
-
-def _score_windows(
-    model: SPLNet,
-    windows: List[np.ndarray],
-    device: torch.device,
-    task_name: str,
-    batch_size: int,
-) -> Dict[str, np.ndarray]:
-    """Run ``model.score_components`` over a list of windows."""
-
-    model.eval()
-    buffers: Dict[str, List[np.ndarray]] = {
-        "reconstruction": [],
-        "dynamics": [],
-        "latent_energy": [],
-        "latent_summary": [],
-    }
-
-    total = len(windows)
-    if total == 0:
-        raise ValueError("No calibration windows available for scoring.")
-
-    ranges = range(0, total, batch_size)
-    for start in tqdm(ranges, desc=f"{task_name}:calibrate", leave=False):
-        chunk = windows[start : start + batch_size]
-        batch_array = np.stack(chunk, axis=0).astype(np.float32)
-        batch = torch.from_numpy(batch_array).to(device)
-        with torch.no_grad():
-            components = model.score_components(batch)
-        buffers["reconstruction"].append(components["reconstruction"].cpu().numpy())
-        buffers["dynamics"].append(components["dynamics"].cpu().numpy())
-        buffers["latent_energy"].append(components["latent_energy"].cpu().numpy())
-        buffers["latent_summary"].append(components["latent_summary"].cpu().numpy())
-
-    return {key: np.concatenate(value, axis=0) for key, value in buffers.items()}
-
-
-def compute_latent_statistics(latent_vectors: np.ndarray, ridge_coef: float = 1e-3) -> Dict[str, np.ndarray]:
-    mean = latent_vectors.mean(axis=0)
-    centered = latent_vectors - mean
-    denom = max(latent_vectors.shape[0] - 1, 1)
-    cov = (centered.T @ centered) / float(denom)
-    cov = cov.astype(np.float32)
-    trace = float(np.trace(cov))
-    if not np.isfinite(trace) or trace <= 0.0:
-        trace = float(cov.shape[0])
-    ridge = ridge_coef * trace / float(cov.shape[0])
-    cov += ridge * np.eye(cov.shape[0], dtype=np.float32)
-    precision = np.linalg.inv(cov)
-    return {
-        "mean": mean.astype(np.float32),
-        "precision": precision.astype(np.float32),
-        "ridge": float(ridge),
-    }
-
-
-def compute_mahalanobis(latent_vectors: np.ndarray, mean: np.ndarray, precision: np.ndarray) -> np.ndarray:
-    diff = latent_vectors - mean
-    scores = np.einsum("bi,ij,bj->b", diff, precision, diff)
-    return scores.astype(np.float32)
-
-
-def combine_component_scores(components: Dict[str, np.ndarray]) -> tuple[np.ndarray, Dict[str, Dict[str, float]]]:
-    stats: Dict[str, Dict[str, float]] = {}
-    combined = None
-    for name, values in components.items():
-        mean = float(values.mean())
-        std = float(values.std() + 1e-6)
-        weight = float(COMPONENT_WEIGHTS.get(name, 0.0))
-        stats[name] = {"mean": mean, "std": std, "weight": weight}
-        normalized = (values - mean) / std
-        if combined is None:
-            combined = weight * normalized
-        else:
-            combined += weight * normalized
-    assert combined is not None
-    return combined.astype(np.float32), stats
-
-
-def prepare_calibration_profile(
+def calibrate_task(
     model: SPLNet,
     dataset: SuccessWindowDataset,
     device: torch.device,
     task_name: str,
     batch_size: int,
 ) -> Dict[str, object]:
-    """Compute calibration statistics using per-episode aggregation."""
+    """Compute reconstruction-based calibration scores for a trained model."""
 
-    windows, slices, infos = _gather_episode_windows(dataset)
-    if not windows:
-        raise ValueError("No windows gathered for calibration.")
-
-    raw_components = _score_windows(model, windows, device, task_name, batch_size)
-    latent_vectors = raw_components.pop("latent_summary")
-    latent_stats = compute_latent_statistics(latent_vectors)
-    mahal = compute_mahalanobis(latent_vectors, latent_stats["mean"], latent_stats["precision"])
-    raw_components["mahalanobis"] = mahal
-    combined_scores, component_stats = combine_component_scores(raw_components)
-
+    model.eval()
+    all_scores: List[np.ndarray] = []
     episode_maxima: List[float] = []
     episode_means: List[float] = []
-    for start, end in slices:
-        episode_slice = combined_scores[start:end]
-        episode_maxima.append(float(np.max(episode_slice)))
-        episode_means.append(float(np.mean(episode_slice)))
+    details: List[Dict[str, object]] = []
 
-    profile: Dict[str, object] = {
+    for info, windows in dataset.iter_episode_windows():
+        if not windows:
+            continue
+        scores_chunks: List[np.ndarray] = []
+        for start in range(0, len(windows), batch_size):
+            chunk = windows[start : start + batch_size]
+            batch = torch.from_numpy(np.stack(chunk, axis=0)).to(device)
+            with torch.no_grad():
+                scores = model.reconstruction_score(batch)
+            scores_chunks.append(scores.cpu().numpy())
+        episode_scores = np.concatenate(scores_chunks, axis=0)
+        all_scores.append(episode_scores)
+        max_score = float(np.max(episode_scores))
+        mean_score = float(np.mean(episode_scores))
+        episode_maxima.append(max_score)
+        episode_means.append(mean_score)
+        details.append(
+            {
+                "task": info.task,
+                "episode": info.path.stem,
+                "successful": True,
+                "num_windows": int(episode_scores.shape[0]),
+                "max_score": max_score,
+                "mean_score": mean_score,
+                "aggregation": "max",
+            }
+        )
+
+    if not all_scores:
+        raise ValueError("Calibration produced no windows for threshold estimation.")
+
+    combined_scores = np.concatenate(all_scores, axis=0)
+    maxima_array = np.asarray(episode_maxima, dtype=np.float32)
+    means_array = np.asarray(episode_means, dtype=np.float32)
+
+    return {
         "combined_scores": combined_scores,
-        "component_stats": component_stats,
-        "latent_stats": latent_stats,
-        "episode_maxima": np.asarray(episode_maxima, dtype=np.float32),
-        "episode_means": np.asarray(episode_means, dtype=np.float32),
-        "window_slices": slices,
-        "episode_infos": infos,
+        "episode_maxima": maxima_array,
+        "episode_means": means_array,
+        "details": details,
     }
-    return profile
 
 
 def plot_losses(losses: List[float], path: Path) -> None:
@@ -283,12 +193,11 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
     plot_losses(losses, task_result_dir / "train_loss.png")
     save_json({"losses": losses}, task_result_dir / "train_loss.json")
 
-    profile = prepare_calibration_profile(model, dataset, device, task, args.batch_size)
-    combined_scores = profile["combined_scores"]
-    episode_maxima: np.ndarray = profile["episode_maxima"]
-    episode_means: np.ndarray = profile["episode_means"]
-    component_stats = profile["component_stats"]
-    latent_stats = profile["latent_stats"]
+    calibration = calibrate_task(model, dataset, device, task, args.batch_size)
+    combined_scores: np.ndarray = calibration["combined_scores"]
+    episode_maxima: np.ndarray = calibration["episode_maxima"]
+    episode_means: np.ndarray = calibration["episode_means"]
+    details: List[Dict[str, object]] = calibration["details"]
     if episode_maxima.size == 0:
         raise ValueError("Calibration produced no episode-level scores.")
     threshold = float(np.quantile(episode_maxima, args.threshold_quantile))
@@ -302,7 +211,6 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
             "episode_max_std": float(episode_maxima.std()),
             "num_scores": int(combined_scores.shape[0]),
             "num_episode_scores": int(episode_maxima.shape[0]),
-            "component_weights": COMPONENT_WEIGHTS,
             "aggregation": "max",
             "calibration_target": "episode_max",
         },
@@ -310,36 +218,16 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
     )
     save_json(
         {
-            "components": component_stats,
             "num_windows": int(combined_scores.shape[0]),
-            "latent_dim": int(latent_stats["mean"].shape[0]),
-            "ridge": float(latent_stats["ridge"]),
-            "calibration_target": "episode_max",
             "num_episode_scores": int(episode_maxima.shape[0]),
             "episode_max_mean": float(episode_maxima.mean()),
             "episode_max_std": float(episode_maxima.std()),
+            "episode_mean_mean": float(episode_means.mean()),
+            "episode_mean_std": float(episode_means.std()),
         },
-        task_result_dir / "calibration_components.json",
+        task_result_dir / "calibration_summary.json",
     )
-    calibration_details = []
-    episode_infos: List[EpisodeInfo] = profile["episode_infos"]
-    window_slices: List[tuple[int, int]] = profile["window_slices"]
-    for idx, info in enumerate(episode_infos):
-        start, end = window_slices[idx]
-        calibration_details.append(
-            {
-                "task": info.task,
-                "episode": info.path.stem,
-                "successful": True,
-                "num_windows": int(end - start),
-                "max_score": float(episode_maxima[idx]),
-                "mean_score": float(episode_means[idx]),
-                "aggregation": "max",
-            }
-        )
-    save_json({"episodes": calibration_details, "aggregation": "max"}, task_result_dir / "calibration_details.json")
-    np.save(task_result_dir / "latent_mean.npy", latent_stats["mean"])
-    np.save(task_result_dir / "latent_precision.npy", latent_stats["precision"])
+    save_json({"episodes": details, "aggregation": "max"}, task_result_dir / "calibration_details.json")
 
     config: Dict[str, object] = {**vars(args)}
     config.update(
@@ -369,7 +257,6 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
         "episode_max_mean": float(episode_maxima.mean()),
         "episode_max_std": float(episode_maxima.std()),
         "num_episode_scores": int(episode_maxima.shape[0]),
-        "component_stats": component_stats,
     }
     print(
         (
