@@ -1,0 +1,95 @@
+{
+  "episodes": [
+    {
+      "task": "pretzel",
+      "episode": "episode_10",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.11497310549020767,
+      "mean_score": 0.09893438220024109,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_11",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.11496002227067947,
+      "mean_score": 0.10336826741695404,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_12",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.11580357700586319,
+      "mean_score": 0.10598176717758179,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_13",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.13435478508472443,
+      "mean_score": 0.10852864384651184,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_15",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.1345812976360321,
+      "mean_score": 0.1108139380812645,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_16",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.1419273316860199,
+      "mean_score": 0.1190389022231102,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_17",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.1099526658654213,
+      "mean_score": 0.0983409658074379,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_18",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.1383441984653473,
+      "mean_score": 0.10995203256607056,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_8",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.13705472648143768,
+      "mean_score": 0.11505230516195297,
+      "aggregation": "max"
+    },
+    {
+      "task": "pretzel",
+      "episode": "episode_9",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.1416366547346115,
+      "mean_score": 0.11548060178756714,
+      "aggregation": "max"
+    }
+  ],
+  "aggregation": "max"
+}

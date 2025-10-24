@@ -1,0 +1,95 @@
+{
+  "episodes": [
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0000",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.25847986340522766,
+      "mean_score": 0.25847986340522766,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0001",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.1403311789035797,
+      "mean_score": 0.1403311789035797,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0002",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.14965862035751343,
+      "mean_score": 0.14965862035751343,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0003",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.4187101423740387,
+      "mean_score": 0.4187101423740387,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0004",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.20296525955200195,
+      "mean_score": 0.20296525955200195,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0005",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.223637193441391,
+      "mean_score": 0.223637193441391,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0006",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.15892042219638824,
+      "mean_score": 0.15892042219638824,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0007",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.18260058760643005,
+      "mean_score": 0.18260058760643005,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0008",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.09291648119688034,
+      "mean_score": 0.09291648119688034,
+      "aggregation": "max"
+    },
+    {
+      "task": "push_chair",
+      "episode": "episode_s_0009",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.2687371075153351,
+      "mean_score": 0.2687371075153351,
+      "aggregation": "max"
+    }
+  ],
+  "aggregation": "max"
+}

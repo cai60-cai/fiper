@@ -17,18 +17,18 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from .data import SuccessWindowDataset
-from .model import SPLNet
-from .utils import NormalizationStats, discover_tasks, save_json
+from data import SuccessWindowDataset
+from model import SPLNet
+from utils import NormalizationStats, discover_tasks, save_json
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train SPLNet on successful calibration rollouts.")
-    parser.add_argument("--data-root", type=Path, default=Path("data"), help="Root directory containing task rollouts.")
+    parser.add_argument("--data-root", type=Path, default=Path("../data"), help="Root directory containing task rollouts.")
     parser.add_argument("--tasks", type=str, nargs="*", default=None, help="Specific task names to train; defaults to all tasks found under data root.")
     parser.add_argument("--window-size", type=int, default=32, help="Sliding window length in steps.")
     parser.add_argument("--stride", type=int, default=4, help="Stride for sliding windows.")
-    parser.add_argument("--batch-size", type=int, default=32, help="Training batch size.")
+    parser.add_argument("--batch-size", type=int, default=16, help="Training batch size.")
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs.")
     parser.add_argument("--learning-rate", type=float, default=1e-4, help="AdamW learning rate.")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="AdamW weight decay.")
@@ -230,6 +230,9 @@ def train_single_task(task: str, args: argparse.Namespace, device: torch.device)
     save_json({"episodes": details, "aggregation": "max"}, task_result_dir / "calibration_details.json")
 
     config: Dict[str, object] = {**vars(args)}
+    for key, value in config.items():
+        if isinstance(value, Path):
+            config[key] = str(value)
     config.update(
         {
             "task": task,

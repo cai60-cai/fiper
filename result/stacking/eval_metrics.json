@@ -1,0 +1,19 @@
+{
+  "accuracy": 0.8725,
+  "TPR": 0.9257731958762887,
+  "TNR": 0.7904761904761904,
+  "TWA": 0.879737373426013,
+  "episodes": 800,
+  "TP": 449,
+  "TN": 249,
+  "FP": 66,
+  "FN": 36,
+  "total_steps": 64883,
+  "correct_steps": 57080,
+  "aggregation": "max",
+  "task": "stacking",
+  "threshold": 0.07929989695549011,
+  "window_size": 32,
+  "stride": 4,
+  "num_windows": 10507
+}

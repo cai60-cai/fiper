@@ -10,19 +10,19 @@ import numpy as np
 import torch
 from tqdm.auto import tqdm
 
-from .data import EpisodeWindowBundle, load_evaluation_episodes
-from .model import SPLNet
-from .utils import NormalizationStats, discover_tasks, load_json, save_json
+from data import EpisodeWindowBundle, load_evaluation_episodes
+from model import SPLNet
+from utils import NormalizationStats, discover_tasks, load_json, save_json
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate SPLNet failure detection performance.")
-    parser.add_argument("--data-root", type=Path, default=Path("data"), help="Root directory with task rollouts.")
+    parser.add_argument("--data-root", type=Path, default=Path("../data"), help="Root directory with task rollouts.")
     parser.add_argument("--result-dir", type=Path, default=Path("result"), help="Directory containing trained artefacts.")
     parser.add_argument("--tasks", type=str, nargs="*", default=None, help="Specific tasks to evaluate; defaults to tasks with saved models.")
     parser.add_argument("--window-size", type=int, default=32, help="Sliding window length used during training.")
     parser.add_argument("--stride", type=int, default=4, help="Stride used during training.")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size for evaluation windows.")
+    parser.add_argument("--batch-size", type=int, default=16, help="Batch size for evaluation windows.")
     parser.add_argument("--output", type=Path, default=Path("result/eval_metrics.json"), help="Where to store evaluation metrics.")
     return parser.parse_args()
 

@@ -1,0 +1,527 @@
+{
+  "episodes": [
+    {
+      "task": "sorting",
+      "episode": "episode_s_0000",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.03429820388555527,
+      "mean_score": 0.030492661520838737,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0001",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03320491686463356,
+      "mean_score": 0.030811363831162453,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0002",
+      "successful": true,
+      "num_windows": 7,
+      "max_score": 0.043590959161520004,
+      "mean_score": 0.03791313245892525,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0003",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03525390475988388,
+      "mean_score": 0.03507937490940094,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0004",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03359084948897362,
+      "mean_score": 0.03194708749651909,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0005",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03160625696182251,
+      "mean_score": 0.03130568936467171,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0006",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03693368658423424,
+      "mean_score": 0.03550659492611885,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0007",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.03798884153366089,
+      "mean_score": 0.03798884153366089,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0008",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03898674249649048,
+      "mean_score": 0.03800863400101662,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0009",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.028463268652558327,
+      "mean_score": 0.027371453121304512,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0010",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.03466270864009857,
+      "mean_score": 0.03186405450105667,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0011",
+      "successful": true,
+      "num_windows": 2,
+      "max_score": 0.02983938716351986,
+      "mean_score": 0.029633060097694397,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0012",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.029317347332835197,
+      "mean_score": 0.027223989367485046,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0013",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.034825533628463745,
+      "mean_score": 0.03198797255754471,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0014",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.03340385481715202,
+      "mean_score": 0.03231966868042946,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0015",
+      "successful": true,
+      "num_windows": 2,
+      "max_score": 0.03238184005022049,
+      "mean_score": 0.03002944588661194,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0016",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.030762605369091034,
+      "mean_score": 0.030762605369091034,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0017",
+      "successful": true,
+      "num_windows": 2,
+      "max_score": 0.03731214627623558,
+      "mean_score": 0.03549624979496002,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0018",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.034755028784275055,
+      "mean_score": 0.031077003106474876,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0019",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.031863272190093994,
+      "mean_score": 0.029069621115922928,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0020",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.028498752042651176,
+      "mean_score": 0.028498752042651176,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0021",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.03452906757593155,
+      "mean_score": 0.029866650700569153,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0022",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.029774783179163933,
+      "mean_score": 0.028226936236023903,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0023",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.0322466604411602,
+      "mean_score": 0.028901690617203712,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0024",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.03442119434475899,
+      "mean_score": 0.03442119434475899,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0025",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.03516346961259842,
+      "mean_score": 0.03516346961259842,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0026",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.029966354370117188,
+      "mean_score": 0.02901458367705345,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0027",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.031686343252658844,
+      "mean_score": 0.029943788424134254,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0028",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.03656795993447304,
+      "mean_score": 0.03551767021417618,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0029",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.030495354905724525,
+      "mean_score": 0.02935337834060192,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0030",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.036279674619436264,
+      "mean_score": 0.036279674619436264,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0031",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.031270381063222885,
+      "mean_score": 0.031270381063222885,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0032",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.030859440565109253,
+      "mean_score": 0.029179716482758522,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0033",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.03436855599284172,
+      "mean_score": 0.03275452181696892,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0034",
+      "successful": true,
+      "num_windows": 2,
+      "max_score": 0.037069421261548996,
+      "mean_score": 0.03581927716732025,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0035",
+      "successful": true,
+      "num_windows": 5,
+      "max_score": 0.036427222192287445,
+      "mean_score": 0.0313308909535408,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0036",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.03135993331670761,
+      "mean_score": 0.02854789048433304,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0037",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.04020276293158531,
+      "mean_score": 0.04020276293158531,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0038",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.029695862904191017,
+      "mean_score": 0.029226083308458328,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0039",
+      "successful": true,
+      "num_windows": 2,
+      "max_score": 0.03321578726172447,
+      "mean_score": 0.03178038448095322,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0040",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.02914055436849594,
+      "mean_score": 0.026601318269968033,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0041",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03134550526738167,
+      "mean_score": 0.031211234629154205,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0042",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.03708794713020325,
+      "mean_score": 0.033282823860645294,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0043",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.037300363183021545,
+      "mean_score": 0.035350147634744644,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0044",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.03148622065782547,
+      "mean_score": 0.03148622065782547,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0045",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.030469156801700592,
+      "mean_score": 0.029740676283836365,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0046",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.03704172745347023,
+      "mean_score": 0.03704172745347023,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0047",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.03736298531293869,
+      "mean_score": 0.03736298531293869,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0048",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.03230036422610283,
+      "mean_score": 0.030027402564883232,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0049",
+      "successful": true,
+      "num_windows": 2,
+      "max_score": 0.03581833094358444,
+      "mean_score": 0.034307800233364105,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0050",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.035327713936567307,
+      "mean_score": 0.03031877800822258,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0051",
+      "successful": true,
+      "num_windows": 3,
+      "max_score": 0.03820956498384476,
+      "mean_score": 0.036957379430532455,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0052",
+      "successful": true,
+      "num_windows": 6,
+      "max_score": 0.033711664378643036,
+      "mean_score": 0.03232305124402046,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0053",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.028910111635923386,
+      "mean_score": 0.028910111635923386,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0054",
+      "successful": true,
+      "num_windows": 4,
+      "max_score": 0.032630641013383865,
+      "mean_score": 0.03051573783159256,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0055",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.039081599563360214,
+      "mean_score": 0.039081599563360214,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0056",
+      "successful": true,
+      "num_windows": 1,
+      "max_score": 0.029603436589241028,
+      "mean_score": 0.029603436589241028,
+      "aggregation": "max"
+    },
+    {
+      "task": "sorting",
+      "episode": "episode_s_0057",
+      "successful": true,
+      "num_windows": 10,
+      "max_score": 0.035317663103342056,
+      "mean_score": 0.02760155126452446,
+      "aggregation": "max"
+    }
+  ],
+  "aggregation": "max"
+}

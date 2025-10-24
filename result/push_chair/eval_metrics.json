@@ -1,0 +1,19 @@
+{
+  "accuracy": 1.0,
+  "TPR": 1.0,
+  "TNR": 1.0,
+  "TWA": 1.0,
+  "episodes": 20,
+  "TP": 10,
+  "TN": 10,
+  "FP": 0,
+  "FN": 0,
+  "total_steps": 193,
+  "correct_steps": 193,
+  "aggregation": "max",
+  "task": "push_chair",
+  "threshold": 0.378217488527298,
+  "window_size": 32,
+  "stride": 4,
+  "num_windows": 20
+}

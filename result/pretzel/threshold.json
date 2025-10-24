@@ -1,0 +1,12 @@
+{
+  "threshold": 0.1418488472700119,
+  "quantile": 0.97,
+  "scores_mean": 0.10904151946306229,
+  "scores_std": 0.014440658502280712,
+  "episode_max_mean": 0.12835882604122162,
+  "episode_max_std": 0.012105901725590229,
+  "num_scores": 56,
+  "num_episode_scores": 10,
+  "aggregation": "max",
+  "calibration_target": "episode_max"
+}

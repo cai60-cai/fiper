@@ -1,0 +1,8 @@
+{
+  "num_windows": 21,
+  "num_episode_scores": 21,
+  "episode_max_mean": 0.06908313930034637,
+  "episode_max_std": 0.040199533104896545,
+  "episode_mean_mean": 0.06908313930034637,
+  "episode_mean_std": 0.040199533104896545
+}
